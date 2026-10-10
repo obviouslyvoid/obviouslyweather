@@ -1,0 +1,12 @@
+{
+  "lat": 50.45,
+  "lon": 30.52,
+  "timezone": "Europe/Kyiv",
+  "timezone_offset": 10800,
+  "data": [
+    {"dt": 1791190800, "temp": 17.5, "feels_like": 16.8, "clouds": 20, "pop": 0, "weather": [{"id": 801, "main": "Clouds", "description": "few clouds", "icon": "02d"}]},
+    {"dt": 1791194400, "temp": 18.2, "feels_like": 17.2, "clouds": 80, "pop": 0.65, "rain": {"1h": 0.9}, "weather": [{"id": 500, "main": "Rain", "description": "light rain", "icon": "10d"}]},
+    {"dt": 1791198000, "temp": 17.1, "feels_like": 16.2, "clouds": 90, "pop": 0.8, "rain": {"1h": 2.4}, "weather": [{"id": 501, "main": "Rain", "description": "moderate rain", "icon": "10d"}]},
+    {"dt": 1791219600, "temp": 11.8, "clouds": 10, "pop": 0.1, "weather": [{"id": 800, "main": "Clear", "description": "clear sky", "icon": "01n"}]}
+  ]
+}

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Meteocons by Bas Milius, MIT; grayscale adaptation, centered using visible alpha bounds. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android" xmlns:aapt="http://schemas.android.com/aapt" android:width="64dp" android:height="64dp" android:viewportWidth="96" android:viewportHeight="96"><group android:translateX="-35.8359" android:translateY="-35.8359" android:scaleX="1.31250" android:scaleY="1.31250"><path android:pathData="M34 50H94" android:strokeColor="#212121" android:strokeWidth="4" android:strokeLineCap="round" android:fillColor="#00000000"/>
+<path android:pathData="M34 64H94" android:strokeColor="#212121" android:strokeWidth="4" android:strokeLineCap="round" android:fillColor="#00000000"/>
+<path android:pathData="M34 78H94" android:strokeColor="#212121" android:strokeWidth="4" android:strokeLineCap="round" android:fillColor="#00000000"/>
+</group></vector>

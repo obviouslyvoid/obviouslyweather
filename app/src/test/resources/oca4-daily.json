@@ -1,0 +1,25 @@
+{
+  "lat": 50.45,
+  "lon": 30.52,
+  "timezone": "Europe/Kyiv",
+  "timezone_offset": 10800,
+  "data": [
+    {
+      "dt": 1791190800,
+      "temp": {"min": 8.4, "max": 19.6, "day": 18.2, "night": 10.5, "eve": 14.1, "morn": 9.6},
+      "feels_like": {"day": 17.3, "night": 8.9, "eve": 12.6, "morn": 8.1},
+      "humidity": 57,
+      "wind_speed": 3.1,
+      "clouds": 45,
+      "pop": 0.8,
+      "rain": {"1h": 0.9},
+      "weather": [{"id": 500, "main": "Rain", "description": "light rain", "icon": "10d"}]
+    },
+    {
+      "dt": 1791277200,
+      "temp": {"min": 7.2, "max": 18.4, "day": 17.7, "night": 8.8, "eve": 12.9, "morn": 8.1},
+      "pop": 0,
+      "weather": [{"id": 800, "main": "Clear", "description": "clear sky", "icon": "01d"}]
+    }
+  ]
+}

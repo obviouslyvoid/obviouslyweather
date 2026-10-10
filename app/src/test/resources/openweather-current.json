@@ -1,0 +1,44 @@
+{
+  "coord": {
+    "lon": 30.5241,
+    "lat": 50.45
+  },
+  "weather": [
+    {
+      "id": 803,
+      "main": "Clouds",
+      "description": "broken clouds",
+      "icon": "04n"
+    }
+  ],
+  "base": "stations",
+  "main": {
+    "temp": 11.68,
+    "feels_like": 10.99,
+    "temp_min": 11.68,
+    "temp_max": 11.68,
+    "pressure": 1024,
+    "humidity": 80,
+    "sea_level": 1024,
+    "grnd_level": 1008
+  },
+  "visibility": 10000,
+  "wind": {
+    "speed": 2.14,
+    "deg": 255,
+    "gust": 4.1
+  },
+  "clouds": {
+    "all": 52
+  },
+  "dt": 1791133204,
+  "sys": {
+    "country": "UA",
+    "sunrise": 1791086530,
+    "sunset": 1791127862
+  },
+  "timezone": 10800,
+  "id": 696050,
+  "name": "Pushcha-Vodytsya",
+  "cod": 200
+}

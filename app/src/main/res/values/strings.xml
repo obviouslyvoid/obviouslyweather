@@ -1,0 +1,11 @@
+<resources>
+    <string name="app_name">obviouslyweather</string>
+    <string name="widget_name">Weather and forecast</string>
+    <string name="widget_description">Current weather with an hourly or daily forecast.</string>
+    <string name="widget_settings">Widget settings</string>
+    <string name="widget_rain_chance">Rain chance</string>
+    <string name="widget_condition">Weather condition</string>
+    <string name="widget_night_condition">Night weather condition</string>
+    <string name="widget_unavailable" translatable="false">—</string>
+    <string name="widget_open_to_load">Open to load weather</string>
+</resources>

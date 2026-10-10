@@ -1,0 +1,23 @@
+{
+  "lat": 50.45,
+  "lon": 30.52,
+  "timezone": "Europe/Kyiv",
+  "timezone_offset": 10800,
+  "data": [{
+    "dt": 1791190800,
+    "sunrise": 1791172680,
+    "sunset": 1791214020,
+    "temp": 17.5,
+    "feels_like": 16.8,
+    "pressure": 1023,
+    "humidity": 58,
+    "dew_point": 9.1,
+    "uvi": 2.2,
+    "clouds": 20,
+    "visibility": 10000,
+    "wind_speed": 2.6,
+    "wind_deg": 275,
+    "wind_gust": 5.2,
+    "weather": [{"id": 801, "main": "Clouds", "description": "few clouds", "icon": "02d"}]
+  }]
+}
