@@ -44,15 +44,6 @@ On Windows, run `gradlew.bat :app:assembleDebug`. The debug APK is in `app/build
 
 Use [Issues](https://github.com/obviouslyvoid/obviouslyweather/issues) for bug reports and feature requests. For code changes, see [Contributing](CONTRIBUTING.md). Report vulnerabilities through [Security](SECURITY.md).
 
-## To-Do list (things from here will be updated and also removed)
-
-- Add custom background colors to the widget.
-- Add adjustable text colors (beside black and white) to widgets.
-- Add more widgets.
-- Add custom font imports for the app itself (not just the widgets).
-- Add other measurement units for pressure and everything else (so the user can set custom ones instead of the defaults).
-- Add other languages.
-
 ## License
 
 [GPL-3.0-or-later](LICENSE). Fonts, icons and dependencies have their own licenses, listed in [Third-party notices](THIRD_PARTY_NOTICES.md).
