@@ -7,9 +7,10 @@ An open-source weather app for Android with a black-and-white interface, home-sc
 ## Features
 
 - Current conditions, hourly forecasts and a daily outlook.
-- Hourly and daily widget with gray and white backgrounds and a black or near-white text (both background and text color are changeable).
+- Hourly and daily widget with gray and white backgrounds and a black or white text (both background and text color are changeable).
 - Rain notifications for upcoming rain, estimated ending times and changes to the forecast. Quiet hours are optional.
 - Light and dark themes, with an option to follow the device theme.
+- Custom fonts can be imported and used for widgets.
 
 ## Screenshots
 
@@ -42,6 +43,15 @@ On Windows, run `gradlew.bat :app:assembleDebug`. The debug APK is in `app/build
 ## Contributing
 
 Use [Issues](https://github.com/obviouslyvoid/obviouslyweather/issues) for bug reports and feature requests. For code changes, see [Contributing](CONTRIBUTING.md). Report vulnerabilities through [Security](SECURITY.md).
+
+## To-Do list (things from here will be updated and also removed)
+
+-- Add custom background colors to the widget.
+-- Add adjustable text colors (beside black and white) to widgets.
+-- Add more widgets.
+-- Add custom font imports for the app itself (not just the widgets).
+-- Add other measurement units for pressure and everything else (so the user can set custom ones instead of the defaults).
+-- Add other languages.
 
 ## License
 
