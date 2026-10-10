@@ -1,13 +1,13 @@
 # obviouslyweather
 
-An open-source weather app for Android with a black-and-white interface, home-screen widgets and rain alerts. Requires an ARM64 device with at least Android 15.
+An open-source weather app for Android with a black-and-white interface, home-screen widget and rain alerts. Requires an ARM64 device with at least Android 15 installed.
 
 **[Download the APK](https://github.com/obviouslyvoid/obviouslyweather/releases)**
 
 ## Features
 
 - Current conditions, hourly forecasts and a daily outlook.
-- Hourly and daily widgets with adjustable backgrounds, text colors and fonts.
+- Hourly and daily widget with gray and white backgrounds and a black or near-white text (both background and text color are changeable).
 - Rain notifications for upcoming rain, estimated ending times and changes to the forecast. Quiet hours are optional.
 - Light and dark themes, with an option to follow the device theme.
 
