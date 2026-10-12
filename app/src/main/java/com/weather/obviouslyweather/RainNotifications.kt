@@ -98,7 +98,7 @@ object RainNotifications {
                 try {
                     context.getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, notification)
                 } catch (_: Exception) {
-                    store.saveRainAlertState(previousState, previousHistory)
+                    store.restoreRainAlertState(previousState, previousHistory)
                 }
             }
         }

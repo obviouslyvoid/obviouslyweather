@@ -138,7 +138,8 @@ class WeatherRepository internal constructor(
 
     private suspend fun hourly(parameters: Map<String, String>, key: String, startedAt: Long): OptionalForecast {
         var hourlyJson: String? = null
-        var hourlyStart = startedAt
+        val windowStart = startedAt - startedAt % 3600
+        var hourlyStart = windowStart
         val hourlyData = JSONArray()
         var hourlyEnvelope: JSONObject? = null
         // OCA4 returns at most 20 records per page. Two pages cover the displayed
@@ -155,12 +156,13 @@ class WeatherRepository internal constructor(
                 for (index in 0 until records.length()) {
                     val record = records.optJSONObject(index) ?: continue
                     val time = record.number("dt") ?: continue
-                    if (time >= startedAt && time < startedAt + 24 * 3600) hourlyData.put(record)
+                    if (time >= windowStart && time < startedAt + 24 * 3600) hourlyData.put(record)
                 }
                 hourlyEnvelope.put("data", hourlyData)
                 hourlyJson = hourlyEnvelope.toString()
                 val merged = OneCall4Parser.hourly(hourlyJson)
-                if (slots.isEmpty() || merged.size >= 24 || slots.last().timestamp >= startedAt + 24 * 3600) break
+                if (slots.isEmpty() || merged.count { it.timestamp >= startedAt } >= 24 ||
+                    slots.last().timestamp >= startedAt + 24 * 3600) break
                 // We never need to interpret a third-page link after the bounded second request.
                 if (pageIndex == 1) break
                 val next = (page.opt("next") as? String)?.trim()?.takeIf { it.isNotEmpty() } ?: break

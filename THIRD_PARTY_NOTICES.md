@@ -15,7 +15,7 @@ obviouslyweather's own code is licensed under GPL-3.0-or-later. The components b
 
 Full copyright notices and license texts are in `app/src/main/assets/licenses/`, including Google's font trademark notice. The fonts are unmodified. Weather artwork has been adapted for the app.
 
-Build tools use Gradle and Android Gradle Plugin (Apache-2.0); asset generation uses Sharp (Apache-2.0). Tests use JUnit (EPL-1.0), MockWebServer (Apache-2.0), and JSON-java (public domain). These test dependencies aren't bundled in release APKs.
+Build tools use Gradle and Android Gradle Plugin (Apache-2.0); asset generation uses Sharp (Apache-2.0). Tests use JUnit (EPL-1.0), MockWebServer (Apache-2.0), Robolectric (MIT), and JSON-java (public domain). These test dependencies aren't bundled in release APKs.
 
 One UI Sans can come from the device or a user import. Samsung font files aren't bundled.
 

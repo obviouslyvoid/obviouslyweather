@@ -14,8 +14,8 @@ android {
         applicationId = "com.weather.obviouslyweather"
         minSdk = 35
         targetSdk = 37
-        versionCode = 30
-        versionName = "1.0"
+        versionCode = 31
+        versionName = "1.0.1"
         testInstrumentationRunner = providers.gradleProperty("weatherTestRunner")
             .getOrElse("com.weather.obviouslyweather.widget.WidgetRenderingChecks")
 
@@ -42,6 +42,7 @@ android {
         buildConfig = true
         compose = true
     }
+    testOptions.unitTests.isIncludeAndroidResources = true
 }
 
 dependencies {
@@ -61,5 +62,6 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation("org.json:json:20240303")
     testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
+    testImplementation("org.robolectric:robolectric:4.17")
     debugImplementation(libs.androidx.compose.ui.tooling)
 }

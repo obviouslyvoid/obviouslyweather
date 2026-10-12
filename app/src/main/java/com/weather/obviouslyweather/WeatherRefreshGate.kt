@@ -21,8 +21,8 @@ internal class RefreshRequest(
 )
 
 internal sealed interface RefreshResult {
-    data class Updated(val response: WeatherResponse) : RefreshResult
-    data class Recent(val report: WeatherReport) : RefreshResult
+    data class Updated(val response: WeatherResponse, val sequence: Long? = null) : RefreshResult
+    data class Recent(val report: WeatherReport, val sequence: Long? = null) : RefreshResult
     data object Skipped : RefreshResult
 }
 

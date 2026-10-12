@@ -17,6 +17,12 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.getValue
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -107,8 +113,17 @@ private fun WeatherPanel(modifier: Modifier = Modifier, content: @Composable Col
 @Composable
 internal fun WeatherContent(report: WeatherReport, fromCache: Boolean = false, display: DisplayPreferences = DisplayPreferences()) {
     val current = report.current
-    val nextSlots = remember(report) { report.next24Hours }
-    val today = report.localTime(System.currentTimeMillis() / 1000).toLocalDate()
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val now by produceState(System.currentTimeMillis() / 1000, report, lifecycle) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (true) {
+                value = System.currentTimeMillis() / 1000
+                delay(60_000 - System.currentTimeMillis() % 60_000)
+            }
+        }
+    }
+    val nextSlots = remember(report, now) { report.next24Hours(now) }
+    val today = report.localTime(now).toLocalDate()
     val daily = remember(report, today) { report.daily.filter { it.date >= today }.take(7) }
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     val use24 = display.use24Hour(DateFormat.is24HourFormat(LocalContext.current))

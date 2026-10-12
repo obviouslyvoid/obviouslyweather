@@ -18,6 +18,7 @@ import okhttp3.mockwebserver.SocketPolicy
 import org.junit.Assert.*
 import org.junit.Test
 import java.util.Collections
+import java.net.InetAddress
 import java.util.IdentityHashMap
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
@@ -31,7 +32,7 @@ class OpenWeatherTransportTest {
 
     private fun localServer(block: suspend CoroutineScope.(MockWebServer) -> Unit) = runBlocking {
         val server = MockWebServer()
-        server.start()
+        server.start(InetAddress.getByName("127.0.0.1"), 0)
         try {
             block(server)
         } finally {

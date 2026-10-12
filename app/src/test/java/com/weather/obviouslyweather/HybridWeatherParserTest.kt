@@ -78,7 +78,7 @@ class HybridWeatherParserTest {
     @Test fun oldThreeHourForecastIsNotAnHourlyFallback() {
         val parsed = report(hourly = null)
         assertTrue(parsed.slots.isEmpty())
-        assertTrue(parsed.next24Hours.isEmpty())
+        assertTrue(parsed.next24Hours(parsed.fetchedAt).isEmpty())
         assertFalse(parsed.daily.isEmpty())
         assertFalse(parsed.dailySlots!!.isEmpty())
         assertEquals("The hourly forecast is currently unavailable.", parsed.forecastNote)

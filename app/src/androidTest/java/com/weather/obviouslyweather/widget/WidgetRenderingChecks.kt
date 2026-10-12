@@ -116,7 +116,7 @@ class WidgetRenderingChecks : Instrumentation() {
             "repeated-clouds" to List(4) { 804 to 804 }
         )
         val hosts = listOf(320f to 200f, 360f to 220f, 411f to 220f)
-        val sizes = listOf(WidgetRenderSize(320, 200, 2.75f), WidgetRenderSize(360, 220, 3f),
+        val sizes = listOf(WidgetRenderSize(280, 110, 3f), WidgetRenderSize(320, 200, 2.75f), WidgetRenderSize(360, 220, 3f),
             WidgetRenderSize(411, 220, 2.75f)) + WidgetRenderSize.forHosts(hosts, 3f, 720, 1280)
         check(sizes.last().density < 2.75f && sizes.last().density % 0.25f != 0f) {
             "The responsive fixture must exercise a constrained, non-quarter density"
@@ -170,16 +170,16 @@ class WidgetRenderingChecks : Instrumentation() {
             preferences, settings, weather, size)
         val drawing = context.createConfigurationContext(
             Configuration(context.resources.configuration).apply { densityDpi = (size.density * 160).roundToInt() })
-        val density = drawing.resources.displayMetrics.density
-        val view = WeatherWidgetViews.create(drawing, preferences, settings, weather,
-            now, false, R.layout.weather_widget_daily).apply(drawing, FrameLayout(drawing))
+        val source = WeatherWidgetViews.create(drawing, preferences, settings, weather,
+            now, false, R.layout.weather_widget_daily)
+        val (view, density) = WeatherWidgetRenderer.layout(drawing, source, size)
         val forecast = view.findViewById<View>(R.id.widget_forecast)
-        forecast.layoutParams = forecast.layoutParams.apply {
-            height = ((size.height - 32).coerceIn(78, 220) * density).roundToInt()
+        val summary = view.findViewById<android.view.ViewGroup>(R.id.widget_summary)
+        for (index in 0 until summary.childCount) {
+            val child = summary.getChildAt(index)
+            if (child.top < 0 || child.bottom > summary.height ||
+                child is TextView && child.height < child.layout.height) errors += "$name: clipped summary child ${child.id}"
         }
-        view.measure(View.MeasureSpec.makeMeasureSpec(size.pixelWidth, View.MeasureSpec.EXACTLY),
-            View.MeasureSpec.makeMeasureSpec(size.pixelHeight, View.MeasureSpec.EXACTLY))
-        view.layout(0, 0, size.pixelWidth, size.pixelHeight)
         val font = WidgetFonts.current(drawing).typeface
         val blank = ColorDrawable(Color.TRANSPARENT)
         val rows = widgetForecastRows(weather, WidgetForecastMode.DAILY, now, true).map {

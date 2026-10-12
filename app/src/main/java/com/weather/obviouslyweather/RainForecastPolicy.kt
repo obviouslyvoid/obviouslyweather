@@ -163,6 +163,36 @@ object RainForecastPolicy {
                     now, endingNotified = true, lastSeenAt = now)
                 return decision(notice)
             }
+            // Some timeline responses omit the hour containing the current observation.
+            // Fresh observed rain plus two adjacent dry hours can still support an estimate.
+            if (slots.none { it.timestamp <= now && it.timestamp + step > now } &&
+                memories.none { it.locationIdentity == location && (it.cancelled || it.start > now) }) {
+                val first = slots.firstOrNull { it.timestamp > now }
+                val second = slots.firstOrNull { it.timestamp == first?.timestamp?.plus(step) }
+                if (first != null && second != null && first.timestamp <= now + step &&
+                    confirmedDry(first) && confirmedDry(second)) {
+                    val index = memories.indexOfLast { it.locationIdentity == location && !it.cancelled &&
+                        it.start <= now && (it.end == null || it.end > now || now - it.lastSeenAt <= step) }
+                    val memory = memories.getOrNull(index)
+                    if (memory == null) {
+                        val notice = RainNotice(RainNoticeKind.ENDING, minOf(report.current.timestamp, now), first.timestamp)
+                        memories += RainEventMemory(location, notice.start, notice.end, lastNotifiedAt = now,
+                            endingNotified = true, lastSeenAt = now)
+                        return decision(notice)
+                    }
+                    memories[index] = memory.copy(lastSeenAt = now)
+                    if (now - memory.lastNotifiedAt >= CHANGE_INTERVAL_SECONDS) {
+                        val changed = memory.end != null && abs(first.timestamp - memory.end) >= CHANGE_INTERVAL_SECONDS
+                        if (changed || !memory.endingNotified) {
+                            val notice = RainNotice(if (changed) RainNoticeKind.CHANGED else RainNoticeKind.ENDING,
+                                memory.start, first.timestamp, memory.likelihood, previousEnd = memory.end)
+                            memories[index] = memories[index].copy(end = first.timestamp,
+                                lastNotifiedAt = now, endingNotified = true)
+                            return decision(notice)
+                        }
+                    }
+                }
+            }
         }
 
         for ((episode, index) in pairs) {

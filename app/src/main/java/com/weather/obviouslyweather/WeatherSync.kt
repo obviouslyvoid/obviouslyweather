@@ -21,7 +21,11 @@ object WeatherSync {
     internal val updates = MutableSharedFlow<WeatherUpdate>(extraBufferCapacity = 1)
 
     internal suspend fun refresh(context: Context, intent: RefreshIntent, background: Boolean = false,
-        onCoreReady: (suspend (WeatherReport) -> Unit)? = null): RefreshResult = withContext(Dispatchers.IO) {
+        onCoreReady: (suspend (WeatherReport) -> Unit)? = null,
+        repository: WeatherRepository = WeatherRepository(),
+        deliverRain: suspend (Context, WeatherReport, Long?) -> Unit = { app, report, sequence ->
+            RainNotifications.deliver(app, report, expectedSequence = sequence)
+        }): RefreshResult = withContext(Dispatchers.IO) {
         val store = WeatherStore(context)
         fun stillCurrent(request: RefreshRequest): Boolean {
             val current = store.settings()
@@ -32,6 +36,7 @@ object WeatherSync {
         var acceptedSequence: Long? = null
         val result = gate.refreshStaged(intent,
             load = {
+                acceptedSequence = latestUpdateSequence
                 val settings = store.settings()
                 val location = settings.location
                 val key = settings.key
@@ -45,7 +50,7 @@ object WeatherSync {
             },
             fetch = { request, acceptCore ->
                 activeRequest = request
-                val response = WeatherRepository().weather(request.location, request.units, request.key,
+                val response = repository.weather(request.location, request.units, request.key,
                     previous = request.cachedResponse, dailyProvider = request.dailyProvider, onCoreResponse = { core ->
                         coroutineContext.ensureActive()
                         if (stillCurrent(request) && acceptCore(core) && stillCurrent(request)) onCoreReady?.invoke(core.report)
@@ -77,13 +82,17 @@ object WeatherSync {
         // Delivery takes the same lock; call it only after the refresh gate releases it.
         if (notificationReport != null) {
             try {
-                RainNotifications.deliver(context, notificationReport, expectedSequence = acceptedSequence)
+                deliverRain(context, notificationReport, acceptedSequence)
             } catch (cancelled: kotlinx.coroutines.CancellationException) {
                 throw cancelled
             } catch (_: Exception) {
                 // A blocked notification or storage failure must not fail a weather refresh.
             }
         }
-        result
+        when (result) {
+            is RefreshResult.Updated -> result.copy(sequence = acceptedSequence)
+            is RefreshResult.Recent -> result.copy(sequence = acceptedSequence)
+            RefreshResult.Skipped -> result
+        }
     }
 }

@@ -51,9 +51,29 @@ object WeatherWidgetRenderer {
             WidgetRenderSize.bitmapPixelBudget(deviceMetrics.widthPixels, deviceMetrics.heightPixels))
         val drawingContext = if (size.density == deviceMetrics.density) context else context.createConfigurationContext(
             Configuration(context.resources.configuration).apply { densityDpi = (size.density * 160).roundToInt() })
-        val metrics = drawingContext.resources.displayMetrics
-        val view = source.apply(drawingContext, FrameLayout(drawingContext))
         val font = WidgetFonts.current(drawingContext).typeface
+        val (view, contentDensity) = layout(drawingContext, source, size)
+        val forecast = view.findViewById<View>(R.id.widget_forecast)
+        val rows = forecastRows(view)
+        forecast.alpha = 0f
+        val bitmap = Bitmap.createBitmap(size.pixelWidth, size.pixelHeight, Bitmap.Config.ARGB_8888)
+        bitmap.density = Bitmap.DENSITY_NONE
+        val canvas = Canvas(bitmap)
+        // Draw directly at the host's pixel density to preserve text and vector detail.
+        view.draw(canvas)
+        canvas.save()
+        canvas.translate(forecast.left.toFloat(), forecast.top.toFloat())
+        val label = view.findViewById<TextView>(R.id.widget_label_0)
+        ForecastArtwork.draw(canvas, forecast.width, forecast.height, contentDensity, label.textSize,
+            Typeface.create(font, 400, false), Typeface.create(font, 500, false), label.currentTextColor, rows,
+            view.layoutDirection == View.LAYOUT_DIRECTION_RTL)
+        canvas.restore()
+        return WidgetArtwork(bitmap, view.contentDescription ?: "Weather and forecast")
+    }
+
+    internal fun layout(context: Context, source: RemoteViews, size: WidgetRenderSize): Pair<View, Float> {
+        val view = source.apply(context, FrameLayout(context))
+        val font = WidgetFonts.current(context).typeface
         fun assignFont(child: View) {
             if (child is TextView) {
                 val weight = when (child.id) {
@@ -67,33 +87,7 @@ object WeatherWidgetRenderer {
             if (child is ViewGroup) for (index in 0 until child.childCount) assignFont(child.getChildAt(index))
         }
         assignFont(view)
-        // Four rows use the full 4x2 body. Taller manual sizes keep a bounded forecast group.
-        view.findViewById<View>(R.id.widget_forecast).let { forecast ->
-            forecast.layoutParams = forecast.layoutParams.apply {
-                height = ((size.height - 32).coerceIn(78, 220) * metrics.density).roundToInt()
-            }
-        }
-        val width = size.pixelWidth
-        val height = size.pixelHeight
-        view.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
-            View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY))
-        view.layout(0, 0, width, height)
-        val forecast = view.findViewById<View>(R.id.widget_forecast)
-        val rows = forecastRows(view)
-        forecast.alpha = 0f
-        val bitmap = Bitmap.createBitmap(size.pixelWidth, size.pixelHeight, Bitmap.Config.ARGB_8888)
-        bitmap.density = Bitmap.DENSITY_NONE
-        val canvas = Canvas(bitmap)
-        // Draw directly at the host's pixel density to preserve text and vector detail.
-        view.draw(canvas)
-        canvas.save()
-        canvas.translate(forecast.left.toFloat(), forecast.top.toFloat())
-        val label = view.findViewById<TextView>(R.id.widget_label_0)
-        ForecastArtwork.draw(canvas, forecast.width, forecast.height, metrics.density, label.textSize,
-            Typeface.create(font, 400, false), Typeface.create(font, 500, false), label.currentTextColor, rows,
-            view.layoutDirection == View.LAYOUT_DIRECTION_RTL)
-        canvas.restore()
-        return WidgetArtwork(bitmap, view.contentDescription ?: "Weather and forecast")
+        return view to WidgetLayout.measure(view, size, context.resources.displayMetrics.density)
     }
 
     private fun forecastRows(root: View): List<ForecastArtwork.Row> {

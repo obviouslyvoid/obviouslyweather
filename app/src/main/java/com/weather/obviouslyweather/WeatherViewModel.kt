@@ -2,6 +2,7 @@
 package com.weather.obviouslyweather
 
 import android.app.Application
+import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CancellationException
@@ -37,7 +38,12 @@ data class WeatherState(
     val saving: Boolean = false, val settingsError: String? = null
 )
 
-class WeatherViewModel(application: Application) : AndroidViewModel(application) {
+class WeatherViewModel internal constructor(application: Application,
+    private val refreshWeather: suspend (Context, RefreshIntent, Boolean, suspend (WeatherReport) -> Unit) -> RefreshResult
+) : AndroidViewModel(application) {
+    constructor(application: Application) : this(application, { context, intent, background, coreReady ->
+        WeatherSync.refresh(context, intent, background, coreReady)
+    })
     private val store = WeatherStore(application)
     private val repository = WeatherRepository()
     private val mutableState = MutableStateFlow(WeatherState(appearance = store.appearance()))
@@ -302,14 +308,14 @@ class WeatherViewModel(application: Application) : AndroidViewModel(application)
         mutableState.update { it.copy(loading = true, error = null, refreshConfirmation = false) }
         weatherJob = viewModelScope.launch(start = CoroutineStart.LAZY) {
             try {
-                val result = WeatherSync.refresh(getApplication(), intent, background) coreReady@{ core ->
+                val result = refreshWeather(getApplication(), intent, background) coreReady@{ core ->
                     coroutineContext.ensureActive()
                     withContext(Dispatchers.Main.immediate) {
                         if (generation == refreshGeneration && (!background || state.value.background.enabled)) {
                             coreReadyGeneration = generation
                             mutableState.update {
                                 if (it.location?.identity == core.location.identity && it.units == core.units)
-                                    it.copy(report = core, loading = false, fromCache = false, cacheNeedsUpgrade = false, error = null)
+                                    it.copy(loading = false)
                                 else it
                             }
                         }
@@ -318,10 +324,12 @@ class WeatherViewModel(application: Application) : AndroidViewModel(application)
                 if (generation != refreshGeneration) return@launch
                 mutableState.update {
                     when (result) {
-                        is RefreshResult.Updated -> if (it.location?.identity == result.response.report.location.identity && it.units == result.response.report.units)
+                        is RefreshResult.Updated -> if (result.sequence == WeatherSync.latestUpdateSequence &&
+                            it.location?.identity == result.response.report.location.identity && it.units == result.response.report.units)
                             it.copy(report = result.response.report, loading = false, fromCache = false, cacheNeedsUpgrade = false, error = null)
                             else it.copy(loading = false)
-                        is RefreshResult.Recent -> if (it.location?.identity == result.report.location.identity && it.units == result.report.units)
+                        is RefreshResult.Recent -> if (result.sequence == WeatherSync.latestUpdateSequence &&
+                            it.location?.identity == result.report.location.identity && it.units == result.report.units)
                             it.copy(report = result.report, loading = false, cacheNeedsUpgrade = false, error = null,
                                 refreshConfirmation = intent == RefreshIntent.MANUAL)
                             else it.copy(loading = false)

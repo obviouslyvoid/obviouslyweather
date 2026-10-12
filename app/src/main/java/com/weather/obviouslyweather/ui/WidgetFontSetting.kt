@@ -13,6 +13,7 @@ import com.weather.obviouslyweather.widget.WeatherWidgets
 import com.weather.obviouslyweather.widget.WidgetFont
 import com.weather.obviouslyweather.widget.WidgetFonts
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -36,7 +37,8 @@ internal fun WidgetFontSetting(enabled: Boolean) {
                     WidgetFonts.current(context)
                 }
                 WeatherWidgets.requestUpdate(context)
-            } catch (cancelled: CancellationException) { throw cancelled }
+            } catch (_: TimeoutCancellationException) { error = "The font provider took too long. Try a file saved on this device." }
+            catch (cancelled: CancellationException) { throw cancelled }
             catch (_: Exception) { error = "Could not import this font. Choose a TTF or OTF file under 8 MB." }
             finally { busy = false }
         }

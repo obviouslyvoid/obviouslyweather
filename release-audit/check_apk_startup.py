@@ -8,6 +8,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -15,19 +16,27 @@ from pathlib import Path
 PACKAGE = "com.weather.obviouslyweather"
 
 
+def resolve_adb(explicit=None):
+    if explicit:
+        return explicit
+    on_path = shutil.which("adb")
+    if on_path:
+        return on_path
+    sdk = os.environ.get("ANDROID_HOME") or os.environ.get("ANDROID_SDK_ROOT")
+    if not sdk and os.environ.get("LOCALAPPDATA"):
+        sdk = str(Path(os.environ["LOCALAPPDATA"]) / "Android/Sdk")
+    executable = "adb.exe" if sys.platform == "win32" else "adb"
+    return str(Path(sdk) / "platform-tools" / executable) if sdk else executable
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--apk", type=Path, required=True)
     parser.add_argument("--serial", required=True, help="Explicit adb device or emulator serial")
-    parser.add_argument("--adb", default=shutil.which("adb"))
+    parser.add_argument("--adb")
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
-    adb = args.adb
-    if not adb:
-        sdk = os.environ.get("ANDROID_HOME") or os.environ.get("ANDROID_SDK_ROOT")
-        if not sdk and os.environ.get("LOCALAPPDATA"):
-            sdk = str(Path(os.environ["LOCALAPPDATA"]) / "Android/Sdk")
-        adb = str(Path(sdk) / "platform-tools/adb.exe") if sdk else "adb"
+    adb = resolve_adb(args.adb)
 
     def run(*arguments):
         result = subprocess.run([adb, "-s", args.serial, *arguments],

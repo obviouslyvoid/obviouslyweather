@@ -60,17 +60,17 @@ class OneCall4ParserTest {
         val data = JSONArray()
         (-3..49).reversed().forEach { hour -> data.put(JSONObject().put("dt", origin + hour * 3600).put("temp", 12 + hour)) }
         val parsed = report(hourly = JSONObject().put("data", data).toString())
-        assertEquals(24, parsed.next24Hours.size)
-        assertEquals(epoch("2026-10-05T10:00:00Z"), parsed.next24Hours.first().timestamp)
-        assertEquals(epoch("2026-10-06T09:00:00Z"), parsed.next24Hours.last().timestamp)
-        assertTrue(parsed.next24Hours.all { it.timestamp >= parsed.fetchedAt && it.timestamp < parsed.fetchedAt + 86400 })
-        assertTrue(parsed.next24Hours.zipWithNext().all { (a, b) -> b.timestamp - a.timestamp == 3600L })
+        assertEquals(24, parsed.next24Hours(parsed.fetchedAt).size)
+        assertEquals(epoch("2026-10-05T10:00:00Z"), parsed.next24Hours(parsed.fetchedAt).first().timestamp)
+        assertEquals(epoch("2026-10-06T09:00:00Z"), parsed.next24Hours(parsed.fetchedAt).last().timestamp)
+        assertTrue(parsed.next24Hours(parsed.fetchedAt).all { it.timestamp >= parsed.fetchedAt && it.timestamp < parsed.fetchedAt + 86400 })
+        assertTrue(parsed.next24Hours(parsed.fetchedAt).zipWithNext().all { (a, b) -> b.timestamp - a.timestamp == 3600L })
     }
 
     @Test fun next24HoursExcludeTheExactEndAndDeduplicate() {
         val parsed = report(hourly = """{"data":[{"dt":$fetchedAt,"temp":1},{"dt":${fetchedAt + 86400},"temp":2},{"dt":$fetchedAt,"temp":3}]}""")
-        assertEquals(listOf(fetchedAt), parsed.next24Hours.map { it.timestamp })
-        assertEquals(1.0, parsed.next24Hours.single().temperature!!, 0.0)
+        assertEquals(listOf(fetchedAt), parsed.next24Hours(parsed.fetchedAt).map { it.timestamp })
+        assertEquals(1.0, parsed.next24Hours(parsed.fetchedAt).single().temperature!!, 0.0)
     }
 
     @Test fun currentMustContainAValidFlatTemperatureAndTime() {

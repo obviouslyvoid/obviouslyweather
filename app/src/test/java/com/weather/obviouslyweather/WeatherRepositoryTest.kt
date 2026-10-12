@@ -155,7 +155,7 @@ class WeatherRepositoryTest {
         assertEquals(1, harness.calls.count { it.path == dailyPath })
         assertFalse(harness.calls.any { it.path == "/data/4.0/onecall/current" || it.path == "/data/2.5/forecast" })
         assertEquals(24, response.report.slots.size)
-        assertEquals(24, response.report.next24Hours.size)
+        assertEquals(24, response.report.next24Hours(response.report.fetchedAt).size)
         assertEquals(7, response.report.providerDaily!!.size)
         assertEquals(6.25, response.report.daily.first().low!!, 0.0)
         assertEquals(22.75, response.report.daily.first().high!!, 0.0)
@@ -168,7 +168,7 @@ class WeatherRepositoryTest {
             assertEquals("imperial", call.parameters["units"])
             assertEquals(key, call.key)
         }
-        assertEquals(listOf(start, firstHour + 20 * 3600L),
+        assertEquals(listOf(start - start % 3600, firstHour + 20 * 3600L),
             harness.calls.filter { it.path == hourlyPath }.map { it.parameters["start"]!!.toLong() })
         assertEquals(setOf("lat", "lon", "units"), harness.calls.single { it.path == dailyPath }.parameters.keys)
     }
@@ -365,7 +365,7 @@ class WeatherRepositoryTest {
             else if (page.getAndIncrement() == 0) hours(0, 20, link) else hours(20, 20)
         }
         val response = harness.fetch()
-        assertEquals(24, response.report.next24Hours.size)
+        assertEquals(24, response.report.next24Hours(response.report.fetchedAt).size)
         assertNull(response.report.forecastNote)
         val followUp = harness.calls.filter { it.path == hourlyPath }[1]
         assertEquals(cursor.toString(), followUp.parameters["start"])

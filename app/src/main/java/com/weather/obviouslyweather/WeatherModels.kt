@@ -43,8 +43,8 @@ data class WeatherReport(
     val dailyLoading: Boolean = false
 ) {
     fun localTime(timestamp: Long): OffsetDateTime = localTimeAt(timestamp, offset, zoneId)
-    val next24Hours: List<ForecastSlot> get() = slots.asSequence()
-        .filter { it.timestamp >= fetchedAt && it.timestamp - fetchedAt < 86400 }
+    fun next24Hours(now: Long): List<ForecastSlot> = slots.asSequence()
+        .filter { it.timestamp >= now && it.timestamp - now < 86400 }
         .sortedBy { it.timestamp }.distinctBy { it.timestamp }
         .take((86400 / forecastStepSeconds.coerceAtLeast(1)).coerceIn(1, 1440)).toList()
     val daily: List<DailyWeather> get() = providerDaily ?: dailyForecast(dailySlots ?: slots, offset, zoneId)

@@ -2,6 +2,7 @@
 package com.weather.obviouslyweather
 
 import android.content.Context
+import android.content.SharedPreferences
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.text.format.DateFormat
@@ -28,7 +29,7 @@ class WeatherStore(context: Context) {
     private val cache = AtomicFile(File(context.noBackupFilesDir, "last_weather_hybrid_v4.json"))
     private val keyAlias = "obviouslyweather.openweather"
 
-    fun settings(): StoredSettings {
+    fun settings(): StoredSettings = synchronized(preferences) {
         var unreadable = false
         val key = try { readKey() } catch (_: Exception) { unreadable = true; null }
         val location = runCatching {
@@ -37,7 +38,7 @@ class WeatherStore(context: Context) {
         val units = runCatching { WeatherUnits.valueOf(preferences.getString("units", null) ?: "METRIC") }.getOrDefault(WeatherUnits.METRIC)
         val appearance = appearance()
         val display = display()
-        return StoredSettings(key, location, units, appearance, unreadable, preferences.getBoolean("predictive_back", true), display, background(), interaction(), dailyProvider())
+        StoredSettings(key, location, units, appearance, unreadable, preferences.getBoolean("predictive_back", true), display, background(), interaction(), dailyProvider())
     }
 
     fun dailyProvider(): DailyForecastProvider =
@@ -78,17 +79,30 @@ class WeatherStore(context: Context) {
         preferences.edit().putBoolean("haptics_enabled", interaction.enabled).putString("haptic_strength", interaction.strength.name).apply()
     }
 
-    fun sentRainAlerts(): Set<String> = preferences.getStringSet("sent_rain_alerts", emptySet()).orEmpty().toSet()
-    fun saveSentRainAlerts(history: Set<String>): Boolean = preferences.edit().putStringSet("sent_rain_alerts", history).commit()
+    fun sentRainAlerts(): Set<String> = synchronized(preferences) {
+        preferences.getStringSet("sent_rain_alerts", emptySet()).orEmpty().toSet()
+    }
+    fun saveSentRainAlerts(history: Set<String>): Boolean = commitPreferences("sent_rain_alerts") {
+        putStringSet("sent_rain_alerts", history)
+    }
 
-    fun rainAlertState(): RainAlertState = RainAlertStateCodec.decode(preferences.getString("rain_alert_state", null))
+    fun rainAlertState(): RainAlertState = synchronized(preferences) {
+        RainAlertStateCodec.decode(preferences.getString("rain_alert_state", null))
+    }
 
-    fun saveRainAlertState(state: RainAlertState, history: Set<String>): Boolean = preferences.edit()
-        .putString("rain_alert_state", RainAlertStateCodec.encode(state))
-        .putStringSet("sent_rain_alerts", history).commit()
+    fun saveRainAlertState(state: RainAlertState, history: Set<String>): Boolean =
+        commitPreferences("rain_alert_state", "sent_rain_alerts") {
+            putString("rain_alert_state", RainAlertStateCodec.encode(state))
+            putStringSet("sent_rain_alerts", history)
+        }
+
+    internal fun restoreRainAlertState(state: RainAlertState, history: Set<String>) = synchronized(preferences) {
+        preferences.edit().putString("rain_alert_state", RainAlertStateCodec.encode(state))
+            .putStringSet("sent_rain_alerts", history).commit()
+    }
 
     fun saveAppearance(appearance: Appearance) {
-        preferences.edit().putString("appearance", appearance.name).apply()
+        synchronized(preferences) { preferences.edit().putString("appearance", appearance.name).apply() }
         applyPlatformAppearance(applicationContext, appearance)
     }
 
@@ -117,18 +131,37 @@ class WeatherStore(context: Context) {
         val previousKey = runCatching { readKey() }.getOrNull()
         val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply { init(Cipher.ENCRYPT_MODE, encryptionKey()) }
         val encrypted = cipher.doFinal(key.toByteArray(Charsets.UTF_8))
-        if (!preferences.edit().putString("key_iv", encode(cipher.iv)).putString("key_ciphertext", encode(encrypted))
-                .putString("units", units.name).putString("appearance", appearance.name).commit()) {
+        if (!commitPreferences("key_iv", "key_ciphertext", "units", "appearance") {
+                putString("key_iv", encode(cipher.iv)).putString("key_ciphertext", encode(encrypted))
+                    .putString("units", units.name).putString("appearance", appearance.name)
+            }) {
             throw WeatherFailure("Could not save your settings. Please try again.")
         }
         if (previousKey != key) invalidateUnboundDaily()
     }
 
     fun saveLocation(location: WeatherLocation) {
-        if (!preferences.edit().putString("location", WeatherParser.locationJson(location).toString()).commit()) {
+        if (!commitPreferences("location") { putString("location", WeatherParser.locationJson(location).toString()) }) {
             throw WeatherFailure("Could not save the selected city. Please try again.")
         }
     }
+
+    private fun commitPreferences(vararg keys: String, change: SharedPreferences.Editor.() -> Unit): Boolean =
+        synchronized(preferences) {
+            val previous = preferences.all
+            if (preferences.edit().apply(change).commit()) true else {
+                // commit() changes Android's in-memory map even when writing to disk fails.
+                preferences.edit().apply {
+                    for (key in keys) when (val value = previous[key]) {
+                        null -> remove(key)
+                        is String -> putString(key, value)
+                        is Set<*> -> putStringSet(key, value.filterIsInstance<String>().toSet())
+                        else -> error("Unsupported committed preference: $key")
+                    }
+                }.commit()
+                false
+            }
+        }
 
     private fun encryptionKey(): SecretKey {
         val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
@@ -139,12 +172,12 @@ class WeatherStore(context: Context) {
         }.generateKey()
     }
 
-    private fun readKey(): String? {
-        val encoded = preferences.getString("key_ciphertext", null) ?: return null
+    private fun readKey(): String? = synchronized(preferences) {
+        val encoded = preferences.getString("key_ciphertext", null) ?: return@synchronized null
         val iv = preferences.getString("key_iv", null) ?: error("Missing IV")
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.DECRYPT_MODE, encryptionKey(), GCMParameterSpec(128, Base64.decode(iv, Base64.NO_WRAP)))
-        return cipher.doFinal(Base64.decode(encoded, Base64.NO_WRAP)).toString(Charsets.UTF_8).takeIf { it.isNotBlank() }
+        cipher.doFinal(Base64.decode(encoded, Base64.NO_WRAP)).toString(Charsets.UTF_8).takeIf { it.isNotBlank() }
     }
 
     fun cached(location: WeatherLocation, units: WeatherUnits): WeatherReport? =

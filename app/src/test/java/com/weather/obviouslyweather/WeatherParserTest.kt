@@ -23,7 +23,7 @@ class WeatherParserTest {
         val parsed = WeatherParser.report(location, WeatherUnits.METRIC, currentFixture, forecastFixture, 1791133300)
         assertTrue(parsed.current.temperature.isFinite())
         assertEquals(40, parsed.slots.size)
-        assertEquals(8, parsed.next24Hours.size)
+        assertEquals(8, parsed.next24Hours(parsed.fetchedAt).size)
         assertTrue(parsed.daily.size in 1..5)
         assertNull(parsed.forecastNote)
         assertTrue(parsed.slots.zipWithNext().all { (a, b) -> a.timestamp < b.timestamp })
@@ -111,7 +111,7 @@ class WeatherParserTest {
         val slots = (-2..10).map { index ->
             ForecastSlot(report.current.timestamp + index * 10800, 10.0, null, null, 800, "Clear", false, null, 0.0, 0.0)
         }
-        val next = report.copy(slots = slots).next24Hours
+        val next = report.copy(slots = slots).next24Hours(report.fetchedAt)
         assertEquals(8, next.size)
         assertEquals(report.current.timestamp + 10800, next.first().timestamp)
     }
