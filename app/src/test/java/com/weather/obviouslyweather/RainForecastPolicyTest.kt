@@ -16,11 +16,15 @@ class RainForecastPolicyTest {
     private fun wet(time: Long, chance: Double? = 60.0, code: Int? = 500, rain: Double = 0.5) =
         ForecastSlot(time, 10.0, 8.0, 12.0, code, "Rain", false, chance, rain, 0.0)
     private fun dry(time: Long) = wet(time, chance = 0.0, code = 800, rain = 0.0)
-    private fun report(vararg slots: ForecastSlot, checkedAt: Long = now): WeatherReport = WeatherReport(
+    private fun report(vararg slots: ForecastSlot, checkedAt: Long = now): WeatherReport {
+        val raining = slots.any { it.timestamp <= checkedAt && it.timestamp + hour > checkedAt && it.condition in 300..599 }
+        return WeatherReport(
         location, WeatherUnits.METRIC,
-        CurrentWeather(checkedAt, 10.0, 10.0, 500, "Rain", false, null, null, null, null, null, null, null, null, null),
+        CurrentWeather(checkedAt, 10.0, 10.0, if (raining) 500 else 800, if (raining) "Rain" else "Clear sky",
+            false, null, null, null, null, null, null, null, null, null),
         slots.toList(), 0, checkedAt, forecastStepSeconds = 3600
-    )
+        )
+    }
     private fun evaluate(weather: WeatherReport, checkedAt: Long = now, state: RainAlertState = RainAlertState(),
         quiet: QuietHoursPreferences = QuietHoursPreferences(), phoneZone: ZoneId = zone,
         legacy: Set<String> = emptySet()) = RainForecastPolicy.evaluate(weather, checkedAt, state, quiet, phoneZone, legacy)
@@ -144,12 +148,14 @@ class RainForecastPolicyTest {
         val knownEnd = report(wet(now + 3 * hour), wet(now + 4 * hour), wet(now + 5 * hour),
             dry(now + 6 * hour), dry(now + 7 * hour))
         assertNull(evaluate(knownEnd, now + hour, initial.state).notification)
-        assertEquals(RainNoticeKind.ENDING, evaluate(knownEnd, now + 3 * hour, initial.state).notification!!.kind)
+        assertEquals(RainNoticeKind.ENDING, evaluate(knownEnd.copy(current = knownEnd.current.copy(timestamp = now + 3 * hour, condition = 500)),
+            now + 3 * hour, initial.state).notification!!.kind)
     }
 
     @Test fun postponedRainUpdatesTheCommunicatedForecastAfterOneHour() {
         val initial = initial()
-        val shifted = report(wet(now + 4 * hour), dry(now + 5 * hour), dry(now + 6 * hour), checkedAt = now + hour)
+        val shifted = report(dry(now + 2 * hour), dry(now + 3 * hour), wet(now + 4 * hour),
+            dry(now + 5 * hour), dry(now + 6 * hour), checkedAt = now + hour)
         assertNull(evaluate(shifted, now + hour - 1, initial.state).notification)
         val changed = evaluate(shifted, now + hour, initial.state)
         assertEquals(RainNoticeKind.CHANGED, changed.notification!!.kind)
@@ -159,15 +165,15 @@ class RainForecastPolicyTest {
         assertNull(evaluate(shifted, now + 2 * hour, changed.state).notification)
     }
 
-    @Test fun movingAnEventEarlierAlsoCountsAsASignificantChange() {
+    @Test fun movingAnEventIntoThePastDoesNotSendAStartTimeUpdate() {
         val initial = initial()
         val shifted = report(wet(now + hour), wet(now + 2 * hour), dry(now + 3 * hour), dry(now + 4 * hour))
-        assertEquals(RainNoticeKind.CHANGED, evaluate(shifted, now + hour, initial.state).notification!!.kind)
+        assertNull(evaluate(shifted, now + hour, initial.state).notification)
     }
 
     @Test fun smallChangesAccumulateAgainstTheCommunicatedForecastRatherThanEveryFetch() {
         val initial = initial()
-        fun shifted(minutes: Long) = report(wet(now + 2 * hour + minutes * 60),
+        fun shifted(minutes: Long) = report(dry(now + 2 * hour), wet(now + 2 * hour + minutes * 60),
             dry(now + 3 * hour + minutes * 60), dry(now + 4 * hour + minutes * 60))
         val minor = evaluate(shifted(30), now + hour, initial.state)
         assertNull(minor.notification)
@@ -194,7 +200,8 @@ class RainForecastPolicyTest {
         val later = report(*(1..12).map { wet(now + it * hour, code = if (it == 12) 502 else 500) }.toTypedArray())
         assertNull(evaluate(later, now + hour, initial.state).notification)
         val stormNow = later.copy(slots = later.slots.map { if (it.timestamp == now + 2 * hour) it.copy(condition = 502) else it })
-        assertEquals(RainLikelihood.HEAVY, evaluate(stormNow, now + 2 * hour, initial.state).notification!!.likelihood)
+        assertEquals(RainLikelihood.HEAVY, evaluate(stormNow.copy(current = stormNow.current.copy(timestamp = now + 2 * hour, condition = 500)),
+            now + 2 * hour, initial.state).notification!!.likelihood)
     }
 
     @Test fun currentRainSeverityUpdatesDoNotReferToAnAlreadyPassedStartingTime() {
@@ -308,12 +315,13 @@ class RainForecastPolicyTest {
 
     @Test fun suppressedUpdatesDoNotChangeWhatWasLastCommunicated() {
         val first = initial()
-        val shifted = report(wet(now + 4 * hour), dry(now + 5 * hour), dry(now + 6 * hour))
-        val quiet = QuietHoursPreferences(startMinutes = 10 * 60, endMinutes = 11 * 60)
+        val shifted = report(dry(now + 2 * hour), dry(now + 3 * hour), wet(now + 4 * hour),
+            dry(now + 5 * hour), dry(now + 6 * hour))
+        val quiet = QuietHoursPreferences(startMinutes = 10 * 60, endMinutes = 10 * 60 + 1)
         val suppressed = evaluate(shifted, now + hour, first.state, quiet)
         assertNull(suppressed.notification)
         assertEquals(first.state.events.single().lastNotifiedAt, suppressed.state.events.single().lastNotifiedAt)
-        assertEquals(RainNoticeKind.CHANGED, evaluate(shifted, now + 2 * hour, suppressed.state, quiet).notification!!.kind)
+        assertEquals(RainNoticeKind.CHANGED, evaluate(shifted, now + hour + 120, suppressed.state, quiet).notification!!.kind)
     }
 
     @Test fun oldIdentityHistoryMigratesWithoutRepeatingItsInitialWarning() {
@@ -323,7 +331,8 @@ class RainForecastPolicyTest {
         assertNull(migrated.notification)
         assertEquals(1, migrated.state.events.size)
         assertTrue(now + 2 * hour in migrated.state.events.single().timestamps)
-        assertEquals(RainNoticeKind.ENDING, evaluate(weather, now + hour, migrated.state).notification!!.kind)
+        assertEquals(RainNoticeKind.ENDING, evaluate(weather.copy(current = weather.current.copy(timestamp = now + hour, condition = 500)),
+            now + hour, migrated.state).notification!!.kind)
     }
 
     @Test fun selectedCitiesKeepSeparateForecastHistories() {

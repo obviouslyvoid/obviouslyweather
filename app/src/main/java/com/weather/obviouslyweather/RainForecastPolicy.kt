@@ -55,10 +55,10 @@ data class RainNotice(
     val previousStart: Long? = null,
     val previousEnd: Long? = null
 ) {
-    fun message(report: WeatherReport, use24Hour: Boolean): String {
+    fun message(report: WeatherReport, use24Hour: Boolean, now: Long = report.fetchedAt): String {
         fun clock(timestamp: Long): String {
             val time = report.localTime(timestamp)
-            val day = if (time.toLocalDate() != report.localTime(report.fetchedAt).toLocalDate())
+            val day = if (time.toLocalDate() != report.localTime(now).toLocalDate())
                 time.format(DateTimeFormatter.ofPattern("EEE", Locale.getDefault())) + " " else ""
             return day + time.format(clockFormatter(use24Hour))
         }
@@ -67,19 +67,21 @@ data class RainNotice(
             RainLikelihood.EXPECTED -> "Rain expected"
             RainLikelihood.HEAVY -> "Heavy rain possible"
         }
-        val changedEnd = end?.takeIf { previousEnd == null || abs(it - previousEnd) >= RainForecastPolicy.CHANGE_INTERVAL_SECONDS }
+        val changedEnd = end?.takeIf { it > now && (previousEnd == null || abs(it - previousEnd) >= RainForecastPolicy.CHANGE_INTERVAL_SECONDS) }
             ?.let { " It may end around ${clock(it)}." }.orEmpty()
-        val upcomingTime = if (start > report.fetchedAt) " around ${clock(start)}" else ""
+        val upcomingTime = if (start > now) " around ${clock(start)}" else ""
         return when (kind) {
             RainNoticeKind.START -> "$rain around ${clock(start)}." +
                 (end?.let { " It may end around ${clock(it)}." } ?: "")
             RainNoticeKind.ENDING -> "Rain may end around ${clock(requireNotNull(end))}."
             RainNoticeKind.CANCELLED -> "Rain is no longer expected around ${clock(start)}."
             RainNoticeKind.CHANGED -> when {
-                previousStart != null && abs(start - previousStart) >= RainForecastPolicy.CHANGE_INTERVAL_SECONDS ->
+                start > now && previousStart != null && abs(start - previousStart) >= RainForecastPolicy.CHANGE_INTERVAL_SECONDS ->
                     "$rain around ${clock(start)} (previously ${clock(previousStart)}).$changedEnd"
                 end != null && previousEnd != null && abs(end - previousEnd) >= RainForecastPolicy.CHANGE_INTERVAL_SECONDS ->
-                    "Rain may now end around ${clock(end)} (previously ${clock(previousEnd)})."
+                    if (start > now) "$rain$upcomingTime. It may now end around ${clock(end)} (previously ${clock(previousEnd)})."
+                    else "Rain may now end around ${clock(end)} (previously ${clock(previousEnd)})."
+                end != null && previousEnd == null && start > now -> "$rain$upcomingTime.$changedEnd"
                 likelihood == RainLikelihood.HEAVY -> "Heavy rain is now possible$upcomingTime.$changedEnd"
                 else -> "Heavy rain is no longer expected$upcomingTime. Rain is still possible.$changedEnd"
             }
@@ -91,6 +93,13 @@ data class RainNotice(
         else -> end?.takeIf { it > now } ?: start.takeIf { it > now }
             ?: (now + RainForecastPolicy.CHANGE_INTERVAL_SECONDS)
     }
+
+    fun isTimely(now: Long): Boolean = when (kind) {
+        RainNoticeKind.START, RainNoticeKind.CANCELLED -> start > now
+        RainNoticeKind.ENDING -> start <= now && end?.let { it > now } == true
+        RainNoticeKind.CHANGED -> if (previousStart != null && abs(start - previousStart) >= RainForecastPolicy.CHANGE_INTERVAL_SECONDS)
+            start > now else end?.let { it > now } ?: true
+    }
 }
 
 data class RainAlertDecision(val notification: RainNotice?, val state: RainAlertState)
@@ -100,6 +109,16 @@ object RainForecastPolicy {
     private const val HISTORY_SECONDS = 48 * 60 * 60L
     private const val MAX_EVENTS = 32
     private const val MAX_SHIFT_SECONDS = 6 * 60 * 60L
+    private const val MAX_OBSERVATION_AGE_SECONDS = 60 * 60L
+
+    internal fun observedRain(report: WeatherReport, now: Long): Boolean =
+        freshObservation(report, now) && report.current.condition in knownConditions && rainyCode(report.current.condition)
+
+    internal fun observedDry(report: WeatherReport, now: Long): Boolean =
+        freshObservation(report, now) && report.current.condition in knownConditions && !rainyCode(report.current.condition)
+
+    private fun freshObservation(report: WeatherReport, now: Long): Boolean =
+        report.current.timestamp in (now - MAX_OBSERVATION_AGE_SECONDS)..(now + 5 * 60)
 
     fun evaluate(
         report: WeatherReport,
@@ -142,24 +161,29 @@ object RainForecastPolicy {
         fun decision(notice: RainNotice? = null) = RainAlertDecision(notice, prune(RainAlertState(memories), now))
         if (quietHours.isQuiet(now, phoneZone)) return decision()
 
-        newEpisodes.firstNotNullOfOrNull { episode ->
-            episode.slots.firstOrNull { it.timestamp > now && it.timestamp <= now + RainAlertPolicy.HORIZON_SECONDS }
-                ?.let { slot -> episode to slot }
-        }?.let { (episode, slot) ->
+        val raining = observedRain(report, now)
+        val currentSlot = slots.firstOrNull { it.timestamp + step > now }
+        val ongoing = episodes.firstOrNull { episode ->
+            episode.slots.any { it.timestamp <= now && it.timestamp + step > now } ||
+                (raining && episode.slots.first() == currentSlot && episode.start <= now + step)
+        }
+        newEpisodes.firstOrNull { it !== ongoing && it.start > now && it.start <= now + RainAlertPolicy.HORIZON_SECONDS }?.let { episode ->
+            val slot = episode.slots.first()
             val notice = RainNotice(RainNoticeKind.START, slot.timestamp, episode.end, requireNotNull(rainLikelihood(slot)))
             memories += RainEventMemory(location, notice.start, notice.end, notice.likelihood, episode.timestamps,
                 now, endingNotified = notice.end != null, lastSeenAt = now)
             return decision(notice)
         }
 
-        if (rainyCode(report.current.condition) && report.current.timestamp in (now - step)..(now + 5 * 60)) {
+        if (raining) {
             newEpisodes.firstOrNull { episode ->
-                episode.slots.any { it.timestamp <= now && it.timestamp + step > now } &&
+                episode === ongoing &&
                     episode.end?.let { it > now && it <= now + RainAlertPolicy.HORIZON_SECONDS } == true
             }?.let { episode ->
                 val likelihood = episode.likelihoodAt(now, step)
-                val notice = RainNotice(RainNoticeKind.ENDING, episode.start, episode.end, likelihood)
-                memories += RainEventMemory(location, episode.start, episode.end, likelihood, episode.timestamps,
+                val start = minOf(episode.start, report.current.timestamp, now)
+                val notice = RainNotice(RainNoticeKind.ENDING, start, episode.end, likelihood)
+                memories += RainEventMemory(location, start, episode.end, likelihood, episode.timestamps,
                     now, endingNotified = true, lastSeenAt = now)
                 return decision(notice)
             }
@@ -198,23 +222,33 @@ object RainForecastPolicy {
         for ((episode, index) in pairs) {
             val memory = memories[index]
             if (now - memory.lastNotifiedAt < CHANGE_INTERVAL_SECONDS) continue
-            val start = if (memory.start <= now && episode.start <= now + step) memory.start else episode.start
+            // A shorter forecast window is not evidence that the rain started later.
+            val start = when {
+                raining && episode === ongoing -> minOf(memory.start, episode.start, report.current.timestamp, now)
+                memory.cancelled -> episode.start
+                episode.start <= memory.start -> episode.start
+                memory.start > now && dryUntil(memory.start, episode.start, slots, step) -> episode.start
+                else -> memory.start
+            }
             val active = episode.slots.any { it.timestamp + step > now }
             if (!active) continue
+            if (start <= now && !raining) continue
             val likelihood = episode.likelihoodAt(now, step)
-            val significantStart = abs(start - memory.start) >= CHANGE_INTERVAL_SECONDS &&
-                (start > now || memory.start > now)
+            val significantStart = start > now && abs(start - memory.start) >= CHANGE_INTERVAL_SECONDS
             val significantEnd = memory.end != null && episode.end != null && episode.end > now &&
                 abs(episode.end - memory.end) >= CHANGE_INTERVAL_SECONDS
             val significantSeverity = (likelihood == RainLikelihood.HEAVY) !=
                 (memory.likelihood == RainLikelihood.HEAVY)
             val ending = episode.end?.takeIf { it > now && it <= now + RainAlertPolicy.HORIZON_SECONDS }
             val notice = when {
-                memory.cancelled -> RainNotice(RainNoticeKind.START, start, episode.end, likelihood)
+                memory.cancelled && start > now -> RainNotice(RainNoticeKind.START, start, episode.end, likelihood)
                 significantStart || significantEnd || significantSeverity ->
-                    RainNotice(RainNoticeKind.CHANGED, start, episode.end, likelihood, memory.start, memory.end)
-                !memory.endingNotified && ending != null && start <= now + step ->
+                    RainNotice(RainNoticeKind.CHANGED, start, episode.end, likelihood,
+                        memory.start.takeIf { significantStart }, memory.end)
+                !memory.endingNotified && ending != null && start <= now && raining ->
                     RainNotice(RainNoticeKind.ENDING, start, ending, likelihood)
+                !memory.endingNotified && ending != null && start > now && start <= now + step ->
+                    RainNotice(RainNoticeKind.CHANGED, start, ending, likelihood, memory.start, memory.end)
                 else -> null
             } ?: continue
             memories[index] = memory.copy(start = start, end = episode.end ?: memory.end, likelihood = likelihood,
@@ -284,6 +318,13 @@ object RainForecastPolicy {
         if (coverage.firstOrNull()?.timestamp != memory.start || coverage.lastOrNull()?.timestamp != end) return false
         if (coverage.zipWithNext().any { (first, second) -> second.timestamp - first.timestamp != step }) return false
         return coverage.all(::confirmedDry)
+    }
+
+    private fun dryUntil(start: Long, end: Long, slots: List<ForecastSlot>, step: Long): Boolean {
+        val coverage = slots.filter { it.timestamp >= start && it.timestamp < end }
+        return coverage.firstOrNull()?.timestamp == start && coverage.last().timestamp + step >= end &&
+            coverage.zipWithNext().all { (first, second) -> second.timestamp - first.timestamp <= step } &&
+            coverage.all(::confirmedDry)
     }
 
     private val knownConditions = setOf(200, 201, 202, 210, 211, 212, 221, 230, 231, 232,

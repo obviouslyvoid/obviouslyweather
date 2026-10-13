@@ -14,8 +14,8 @@ android {
         applicationId = "com.weather.obviouslyweather"
         minSdk = 35
         targetSdk = 37
-        versionCode = 31
-        versionName = "1.0.1"
+        versionCode = 32
+        versionName = "1.0.2"
         testInstrumentationRunner = providers.gradleProperty("weatherTestRunner")
             .getOrElse("com.weather.obviouslyweather.widget.WidgetRenderingChecks")
 

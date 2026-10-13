@@ -8,6 +8,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Bundle
 import android.text.format.DateFormat
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
@@ -21,6 +22,7 @@ object RainNotifications {
     const val CHANNEL_ID = "rain_alerts"
     private const val NOTIFICATION_ID = 1001
     private const val MAX_FORECAST_AGE_SECONDS = 3600L
+    private const val EVENT_START = "rain_event_start"
     private val deliveryMonitor = Any()
 
     fun createChannel(context: Context) {
@@ -56,9 +58,19 @@ object RainNotifications {
             if (store.cached(report.location, report.units)?.fetchedAt?.let { it > report.fetchedAt } == true) return@withLock
             createChannel(context)
             if (!allowed(context)) return@withLock
+            val previousState = store.rainAlertState()
+            if (RainForecastPolicy.observedDry(report, checkedAt)) synchronized(deliveryMonitor) {
+                val manager = context.getSystemService(NotificationManager::class.java)
+                val active = manager.activeNotifications.firstOrNull { it.id == NOTIFICATION_ID && it.notification.channelId == CHANNEL_ID }
+                val start = active?.let {
+                    it.notification.extras.getLong(EVENT_START, 0).takeIf { it > 0 }
+                        ?: previousState.events.filter { event -> event.locationIdentity == report.location.identity }
+                            .maxByOrNull { event -> event.lastNotifiedAt }?.start
+                } ?: 0
+                if (start in 1..checkedAt) manager.cancel(NOTIFICATION_ID)
+            }
             val previousHistory = store.sentRainAlerts()
             val history = RainAlertPolicy.rememberEpisodes(report, checkedAt, previousHistory)
-            val previousState = store.rainAlertState()
             val decision = RainForecastPolicy.evaluate(report, checkedAt, previousState, settings.background.quietHours, quietZone, history)
             val alert = decision.notification
             if (alert == null) {
@@ -69,7 +81,8 @@ object RainNotifications {
             val intent = Intent(context, MainActivity::class.java).setAction(OPEN_WEATHER_ACTION)
                 .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
             val pendingIntent = PendingIntent.getActivity(context, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-            val message = alert.message(report, use24Hour)
+            if (!alert.isTimely(checkedAt)) return@withLock
+            val message = alert.message(report, use24Hour, checkedAt)
             val notification = NotificationCompat.Builder(context, CHANNEL_ID)
                 .setSmallIcon(R.drawable.notification_rain)
                 .setContentTitle("${report.location.name} | Rain")
@@ -80,6 +93,7 @@ object RainNotifications {
                 .setOnlyAlertOnce(false)
                 .setCategory(NotificationCompat.CATEGORY_RECOMMENDATION)
                 .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+                .addExtras(Bundle().apply { putLong(EVENT_START, alert.start) })
                 .setTimeoutAfter((alert.expiresAt(checkedAt) - checkedAt).coerceAtLeast(1) * 1000)
                 .build()
             synchronized(deliveryMonitor) {
@@ -88,6 +102,10 @@ object RainNotifications {
                 if (latest.background != settings.background || latest.display != settings.display ||
                     latest.location?.identity != report.location.identity || latest.units != report.units || latest.key != settings.key ||
                     latest.background.quietHours.isQuiet(deliveryTime, phoneZone ?: ZoneId.systemDefault()) ||
+                    !alert.isTimely(deliveryTime) ||
+                    (alert.start > checkedAt && alert.start <= deliveryTime) ||
+                    (alert.start <= deliveryTime && alert.kind in setOf(RainNoticeKind.ENDING, RainNoticeKind.CHANGED) &&
+                        !RainForecastPolicy.observedRain(report, deliveryTime)) ||
                     report.fetchedAt > deliveryTime || deliveryTime - report.fetchedAt > MAX_FORECAST_AGE_SECONDS ||
                     !allowed(context)) return@synchronized
                 val remembered = decision.state.events.flatMap { event ->
