@@ -24,7 +24,7 @@ An open-source weather app for Android with a black-and-white interface, home-sc
 
 ## Setup
 
-Install the APK, enter your [OpenWeather API key](https://home.openweathermap.org/api_keys), and choose a city. One Call API 3.0 & One Call API 4.0 need manual setup, more info: [One Call API 4.0](https://openweathermap.org/api/one-call-4?collection=one_call_api). Remember: One Call API 4.0 is preferred and One Call API 3.0 is deprecated by OpenWeather, but we still support it for people who prefer it to use it.
+Install the APK, enter your [OpenWeather API key](https://home.openweathermap.org/api_keys), and choose a city. One Call API 3.0 & One Call API 4.0 require manual setup, more info: [One Call API 4.0](https://openweathermap.org/api/one-call-4?collection=one_call_api). Remember: One Call API 4.0 is preferred and One Call API 3.0 is deprecated by OpenWeather, but we still support it for people who prefer it to use it.
 
 Hourly forecasts need One Call API 4.0 access. Daily forecasts can use One Call 4.0 or 3.0; you choose which one in settings.
 
